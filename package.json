@@ -1,18 +1,44 @@
 {
   "name": "hyperx-cloud-flight-wireless",
-  "version": "1.0.0",
-  "description": "Module for interfacing with HyperX Cloud Flight Wireless",
+  "version": "1.1.0",
+  "description": "Enhanced module for interfacing with HyperX Cloud Flight Wireless with robust reconnection handling",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "prettier --check .",
+    "format": "prettier --write ."
   },
-  "author": "Søren Brokær <mail@srn.io>",
-  "license": "ISC",
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "author": "Alex Adiaconitei <alex.adiaconitei@gmail.com> (https://github.com/AlexAdiaconitei)",
+  "contributors": [
+    "Søren Brokær <mail@srn.io> (https://srn.io)"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AlexAdiaconitei/hyperx-cloud-flight-wireless.git"
+  },
+  "keywords": [
+    "hyperx",
+    "cloud-flight",
+    "wireless",
+    "headset",
+    "gaming",
+    "audio"
+  ],
+  "license": "MIT",
   "dependencies": {
-    "emittery": "^0.7.2",
-    "node-hid": "^2.1.1"
+    "eventemitter3": "^5.0.1",
+    "node-hid": "^3.1.2"
   },
   "devDependencies": {
-    "prettier": "^2.2.1"
-  }
+    "prettier": "^3.5.3"
+  },
+  "bugs": {
+    "url": "https://github.com/AlexAdiaconitei/hyperx-cloud-flight-wireless/issues"
+  },
+  "homepage": "https://github.com/AlexAdiaconitei/hyperx-cloud-flight-wireless"
 }
