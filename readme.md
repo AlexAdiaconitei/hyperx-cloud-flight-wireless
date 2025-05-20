@@ -18,7 +18,7 @@ This fork includes several critical improvements:
 ## 📦 Install
 
 ```sh
-$ npm install AlexAdiaconitei/hyperx-cloud-flight-wireless
+$ npm install hyperx-cloud-flight-wireless
 ```
 
 ## 🚀 Usage
