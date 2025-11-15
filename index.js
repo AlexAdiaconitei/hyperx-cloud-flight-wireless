@@ -1,8 +1,51 @@
 const HID = require('node-hid')
 const EventEmitter = require('eventemitter3')
 
-const VENDOR_ID = 2385
-const PRODUCT_ID = 5828
+// Supported devices
+const DEVICES = {
+  // HyperX Cloud Flight Wireless (original support)
+  CLOUD_FLIGHT: {
+    vendorId: 2385, // 0x0951
+    productId: 5828, // 0x16C4
+    name: 'HyperX Cloud Flight Wireless',
+  },
+  // HP HyperX Cloud II Wireless
+  HP_CLOUD_II: {
+    vendorId: 1008, // 0x03F0
+    productId: 395, // 0x018B
+    name: 'HP HyperX Cloud II Wireless',
+  },
+  // HP HyperX Cloud II Wireless (variant B)
+  HP_CLOUD_II_B: {
+    vendorId: 1008, // 0x03F0
+    productId: 1686, // 0x0696
+    name: 'HP HyperX Cloud II Wireless (B)',
+  },
+  // HP HyperX Cloud II Core Wireless
+  HP_CLOUD_II_CORE: {
+    vendorId: 1008, // 0x03F0
+    productId: 2453, // 0x0D93
+    name: 'HP HyperX Cloud II Core Wireless',
+  },
+  // HP HyperX Cloud Alpha Wireless
+  HP_CLOUD_ALPHA: {
+    vendorId: 1008, // 0x03F0
+    productId: 2445, // 0x098D
+    name: 'HP HyperX Cloud Alpha Wireless',
+  },
+  // HP HyperX Cloud Stinger 2 Wireless
+  HP_CLOUD_STINGER_2: {
+    vendorId: 1008, // 0x03F0
+    productId: 3475, // 0x0D93
+    name: 'HP HyperX Cloud Stinger 2 Wireless',
+  },
+  // Kingston HyperX Cloud II Wireless
+  KINGSTON_CLOUD_II: {
+    vendorId: 2385, // 0x0951
+    productId: 5912, // 0x1718
+    name: 'Kingston HyperX Cloud II Wireless',
+  },
+}
 
 // usage pages
 // 65472 - power state/muting/unmuting - byte length: 2
@@ -30,19 +73,116 @@ module.exports = ({ debug = false, updateDelay = 5 * 1000 * 60 } = {}) => {
   let interval = null
   let isConnected = false
   let powerState = 'unknown'
+  let detectedDeviceType = null
+
+  // Function to detect device type
+  function detectDeviceType(vendorId, productId) {
+    for (const [key, device] of Object.entries(DEVICES)) {
+      if (device.vendorId === vendorId && device.productId === productId) {
+        return key
+      }
+    }
+    return null
+  }
+
+  // Function to get battery request buffer based on device type
+  function getBatteryRequestBuffer(deviceType) {
+    switch (deviceType) {
+      case 'CLOUD_FLIGHT':
+        // Original Cloud Flight uses bootstrap method
+        return Buffer.from([
+          0x21, 0xff, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ])
+
+      case 'HP_CLOUD_II':
+      case 'HP_CLOUD_II_B':
+      case 'HP_CLOUD_STINGER_2':
+        // HP Cloud II Wireless / Stinger 2
+        return Buffer.from([0x06, 0xff, 0xbb, 0x02])
+
+      case 'HP_CLOUD_II_CORE':
+        // HP Cloud II Core
+        return Buffer.from([0x66, 0x89])
+
+      case 'HP_CLOUD_ALPHA':
+        // HP Cloud Alpha
+        return Buffer.from([0x21, 0xbb, 0x0b])
+
+      case 'KINGSTON_CLOUD_II':
+        // Kingston Cloud II - 62 byte buffer
+        const buffer = Buffer.alloc(62)
+        buffer[0] = 0x06
+        buffer[2] = 0x02
+        buffer[4] = 0x9a
+        buffer[7] = 0x68
+        buffer[8] = 0x4a
+        buffer[9] = 0x8e
+        buffer[10] = 0x0a
+        buffer[14] = 0xbb
+        buffer[15] = 0x01
+        return buffer
+
+      default:
+        return null
+    }
+  }
+
+  // Function to get battery level from response based on device type
+  function getBatteryLevelFromResponse(data, deviceType) {
+    switch (deviceType) {
+      case 'HP_CLOUD_II':
+      case 'HP_CLOUD_II_B':
+      case 'HP_CLOUD_STINGER_2':
+      case 'KINGSTON_CLOUD_II':
+        // Battery level at index 7
+        return data.length > 7 ? data[7] : null
+
+      case 'HP_CLOUD_II_CORE':
+        // Battery level at index 4
+        return data.length > 4 ? data[4] : null
+
+      case 'HP_CLOUD_ALPHA':
+        // Battery level at index 3
+        return data.length > 3 ? data[3] : null
+
+      case 'CLOUD_FLIGHT':
+        // Cloud Flight uses the original complex parsing logic
+        return null
+
+      default:
+        return null
+    }
+  }
 
   // Function to get fresh device list
   function getDevices() {
-    return HID.devices().filter(
-      (d) => d.vendorId === VENDOR_ID && d.productId === PRODUCT_ID,
-    )
+    const allDevices = HID.devices()
+    const supportedDevices = []
+
+    for (const device of allDevices) {
+      const deviceType = detectDeviceType(device.vendorId, device.productId)
+      if (deviceType) {
+        supportedDevices.push(device)
+        if (!detectedDeviceType) {
+          detectedDeviceType = deviceType
+          if (debug) {
+            console.log(
+              `Detected device: ${DEVICES[deviceType].name} (${deviceType})`,
+            )
+          }
+        }
+      }
+    }
+
+    return supportedDevices
   }
 
   // Find devices initially
   let devices = getDevices()
 
   if (devices.length === 0) {
-    throw new Error('HyperX Cloud Flight Wireless was not found')
+    throw new Error('No supported HyperX headset was found')
   }
 
   // Function to close all devices
@@ -146,7 +286,28 @@ module.exports = ({ debug = false, updateDelay = 5 * 1000 * 60 } = {}) => {
       interval = setInterval(bootstrap, updateDelay)
     }
 
-    // Fresh discovery of bootstrap device each time
+    // For Cloud II devices, bootstrap is simpler - just send battery request
+    if (
+      detectedDeviceType &&
+      detectedDeviceType !== 'CLOUD_FLIGHT' &&
+      bootstrapDevice
+    ) {
+      try {
+        const buffer = getBatteryRequestBuffer(detectedDeviceType)
+        if (buffer) {
+          bootstrapDevice.write(buffer)
+          isConnected = true
+          return true
+        }
+      } catch (e) {
+        if (debug) console.error('Error in Cloud II bootstrap:', e)
+        bootstrapDevice = null
+        emitter.emit('error', e)
+        return false
+      }
+    }
+
+    // Original Cloud Flight bootstrap logic
     try {
       if (!bootstrapDevice) {
         const bootstrapDeviceInfo = devices.find(
@@ -169,10 +330,9 @@ module.exports = ({ debug = false, updateDelay = 5 * 1000 * 60 } = {}) => {
         }
       }
 
-      const buffer = Buffer.from([
-        0x21, 0xff, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      ])
+      const buffer = getBatteryRequestBuffer(
+        detectedDeviceType || 'CLOUD_FLIGHT',
+      )
 
       try {
         bootstrapDevice.write(buffer)
@@ -193,6 +353,73 @@ module.exports = ({ debug = false, updateDelay = 5 * 1000 * 60 } = {}) => {
   }
 
   function initializeDevices() {
+    // For Cloud II devices, find the device with the highest usagePage
+    if (detectedDeviceType && detectedDeviceType !== 'CLOUD_FLIGHT') {
+      let selectedDevice = null
+      let highestUsage = -1
+
+      for (const deviceInfo of devices) {
+        const usage = deviceInfo.usagePage || 0
+        if (usage > highestUsage) {
+          highestUsage = usage
+          selectedDevice = deviceInfo
+        }
+      }
+
+      if (selectedDevice) {
+        try {
+          const device = new HID.HID(selectedDevice.path)
+          deviceHandles.push(device)
+          bootstrapDevice = device
+
+          device.on('error', (err) => {
+            if (debug) console.error('Device error:', err)
+
+            const errorStr = String(err).toLowerCase()
+            const isDisconnectError =
+              errorStr.includes('could not read') ||
+              errorStr.includes('disconnect') ||
+              errorStr.includes('not found') ||
+              errorStr.includes('access denied')
+
+            if (isDisconnectError && !reconnectTimer) {
+              reconnectTimer = setTimeout(reinitializeDevices, reconnectBackoff)
+            }
+
+            emitter.emit('error', err)
+          })
+
+          device.on('data', (data) => {
+            if (debug) {
+              console.log(new Date(), data, `length: ${data.length}`)
+              for (let byte of data) {
+                console.log(byte)
+              }
+            }
+
+            const batteryLevel = getBatteryLevelFromResponse(
+              data,
+              detectedDeviceType,
+            )
+            if (
+              batteryLevel !== null &&
+              batteryLevel >= 0 &&
+              batteryLevel <= 100
+            ) {
+              if (debug) console.log(`Cloud II battery level: ${batteryLevel}%`)
+              emitter.emit('battery', batteryLevel)
+            }
+          })
+
+          return
+        } catch (err) {
+          if (debug) console.error('Error initializing Cloud II device:', err)
+          emitter.emit('error', err)
+        }
+      }
+    }
+
+    // Original Cloud Flight initialization
     devices.forEach((deviceInfo) => {
       try {
         const device = new HID.HID(deviceInfo.path)
@@ -224,6 +451,24 @@ module.exports = ({ debug = false, updateDelay = 5 * 1000 * 60 } = {}) => {
             }
           }
 
+          // For Cloud II devices, try to extract battery directly
+          if (detectedDeviceType && detectedDeviceType !== 'CLOUD_FLIGHT') {
+            const batteryLevel = getBatteryLevelFromResponse(
+              data,
+              detectedDeviceType,
+            )
+            if (
+              batteryLevel !== null &&
+              batteryLevel >= 0 &&
+              batteryLevel <= 100
+            ) {
+              if (debug) console.log(`Cloud II battery level: ${batteryLevel}%`)
+              emitter.emit('battery', batteryLevel)
+              return
+            }
+          }
+
+          // Original Cloud Flight parsing logic
           switch (data.length) {
             case 0x2:
               if (data[0] === 0x64 && data[1] == 0x3) {
@@ -387,6 +632,19 @@ module.exports = ({ debug = false, updateDelay = 5 * 1000 * 60 } = {}) => {
   // Start the initial connection
   initializeDevices()
   bootstrap()
+
+  // Add method to get detected device info
+  emitter.getDeviceInfo = function () {
+    if (!detectedDeviceType) {
+      return null
+    }
+    return {
+      type: detectedDeviceType,
+      name: DEVICES[detectedDeviceType].name,
+      vendorId: DEVICES[detectedDeviceType].vendorId,
+      productId: DEVICES[detectedDeviceType].productId,
+    }
+  }
 
   // Add method to clear listeners - FIXED to avoid recursion
   emitter.clearListeners = function () {

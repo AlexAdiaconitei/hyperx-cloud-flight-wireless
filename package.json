@@ -1,7 +1,7 @@
 {
   "name": "hyperx-cloud-flight-wireless",
-  "version": "1.1.0",
-  "description": "Enhanced module for interfacing with HyperX Cloud Flight Wireless with robust reconnection handling",
+  "version": "2.0.0",
+  "description": "Enhanced module for interfacing with HyperX wireless headsets (Cloud Flight, Cloud II, Cloud Alpha, Cloud Stinger 2) with robust reconnection handling",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -24,10 +24,15 @@
   "keywords": [
     "hyperx",
     "cloud-flight",
+    "cloud-ii",
+    "cloud-alpha",
+    "cloud-stinger",
     "wireless",
     "headset",
     "gaming",
-    "audio"
+    "audio",
+    "battery",
+    "hid"
   ],
   "license": "MIT",
   "dependencies": {
